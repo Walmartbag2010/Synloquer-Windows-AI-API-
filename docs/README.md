@@ -1,6 +1,6 @@
 # 技术文档
 
-Silver Telegram 项目的完整技术文档。
+Synloquer 项目的完整技术文档。
 
 ## 文档索引
 

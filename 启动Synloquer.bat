@@ -1,16 +1,16 @@
 @echo off
 chcp 65001 >nul
-title DeepSeek 终端聊天室
+title Synloquer
 
 cd /d "%~dp0"
 
-set PYTHON="..\agent_env\Scripts\python.exe"
+set PYTHON="agent_env\Scripts\python.exe"
 
 if not exist %PYTHON% (
     set PYTHON=python
 )
 
-%PYTHON% terminal_chat.py
+%PYTHON% synloquer.py
 
 echo.
 pause

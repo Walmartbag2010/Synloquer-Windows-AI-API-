@@ -4,7 +4,7 @@
 
 
 
-# Silver Telegram
+# Synloquer
 
 
 
@@ -59,7 +59,7 @@ git clone https://github.com/Walmartbag2010/silver-telegram.git
 cd silver-telegram
 ```
 
-然后双击 `首次配置.bat`，配置向导会自动：
+然后双击 `配置Synloquer.bat`，配置向导会自动：
 - 创建 Python 虚拟环境并安装依赖
 - 从模板生成配置文件
 - 用记事本打开配置引导你填写
@@ -129,10 +129,10 @@ BOCHA_API_KEY=sk-你的密钥
 
 ### 启动
 
-双击 `启动终端聊天.bat`，或：
+双击 `启动Synloquer.bat`，或：
 
 ```bash
-agent_env\Scripts\python.exe terminal_chat.py
+agent_env\Scripts\python.exe synloquer.py
 ```
 
 
@@ -190,9 +190,9 @@ AI 调用 `show_image` 后，会用旧版 Windows 照片查看器在新窗口打
 
 ```
 silver-telegram/
-├── terminal_chat.py        # 主程序
-├── 启动终端聊天.bat          # 启动脚本
-├── 首次配置.bat              # 首次配置向导
+├── synloquer.py           # 主程序
+├── 启动Synloquer.bat         # 启动脚本
+├── 配置Synloquer.bat         # 首次配置向导
 ├── config.example.json     # 配置模板
 ├── config.json             # 实际配置（自动创建，不上传）
 ├── .env.example            # 密钥模板

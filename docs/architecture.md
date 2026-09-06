@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-Silver Telegram 是一个纯终端的 LLM 对话助手，基于 Python 实现，无 Web 界面，无 GUI 框架，仅依赖 `requests` 库。核心设计目标是**轻量化、可配置、多模型适配**。
+Synloquer 是一个纯终端的 LLM 对话助手，基于 Python 实现，无 Web 界面，无 GUI 框架，仅依赖 `requests` 库。核心设计目标是**轻量化、可配置、多模型适配**。
 
 ## 整体架构
 
@@ -147,11 +147,11 @@ chat_stream(user_input)
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `terminal_chat.py` | ~1280 | 主程序，包含所有逻辑 |
+| `synloquer.py` | ~1280 | 主程序，包含所有逻辑 |
 | `config.example.json` | ~70 | 配置模板 |
 | `.env.example` | ~80 | 密钥模板 |
-| `启动终端聊天.bat` | ~10 | 启动脚本 |
-| `首次配置.bat` | ~120 | 首次配置向导 |
+| `启动Synloquer.bat` | ~10 | 启动脚本 |
+| `配置Synloquer.bat` | ~120 | 首次配置向导 |
 | `requirements.txt` | 1 | Python 依赖 |
 
-> 注：所有逻辑集中在 `terminal_chat.py` 单文件中，便于阅读和部署。后续如复杂度增长可拆分为模块。
+> 注：所有逻辑集中在 `synloquer.py` 单文件中，便于阅读和部署。后续如复杂度增长可拆分为模块。

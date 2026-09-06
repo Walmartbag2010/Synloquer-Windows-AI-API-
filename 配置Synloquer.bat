@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title AI 终端聊天室 - 首次配置向导
+title Synloquer - 首次配置向导
 setlocal enabledelayedexpansion
 
 echo ============================================================
@@ -97,7 +97,7 @@ echo      填入你在 env_file_path 中指定的路径
 echo      填入对应的 API 密钥（如 DEEPSEEK_API_KEY、BOCHA_API_KEY）
 echo.
 echo   2. 启动程序
-echo      双击项目目录下的 "启动终端聊天.bat"
+echo      双击项目目录下的 "启动Synloquer.bat"
 echo.
 echo   3. 验证配置
 echo      启动后会显示当前服务商、模型和密钥文件路径

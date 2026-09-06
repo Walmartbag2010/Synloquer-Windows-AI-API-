@@ -1,11 +1,8 @@
 """
-DeepSeek 终端聊天室（工具增强版）
-- 模型: deepseek-v4-pro（对话）/ deepseek-v4-flash（总结）
-- 工具: 博查搜索、本地文件读取、文件列表、计算器、图片展示
-- 系统提示词仅保留格式要求
-- 终端交互: "我：" / "AI：" 前缀
-- 对话结束后自动调用 flash 模型总结对话与记忆点
-- 长期记忆: 启动时加载 memory.md，结束时更新
+Synloquer - 轻量级终端 LLM 对话助手
+
+支持多服务商适配（OpenAI兼容/Anthropic/百度文心）、工具调用、长期记忆。
+配置见 config.json，密钥见 .env 文件。
 """
 
 import requests
@@ -661,87 +658,58 @@ def _resize_window_by_pid(pid: int, width: int, height: int) -> bool:
 
 def _open_image_file(filepath: str) -> tuple:
     """
-    尝试多种方式打开图片文件，确保进程完全分离。
-    优先使用轻量级查看器，避免弹出"打开方式"对话框。
+    按优先级尝试多种方式打开图片，确保进程完全分离。
     返回 (是否成功, 信息)
     """
     errors = []
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP：子进程独立于父进程
+    CREATE_FLAGS = 0x00000008 | 0x00000200
 
-    # Windows 进程分离标志：让启动的进程独立于父进程
-    CREATE_FLAGS = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-
-    # 先验证文件
     if not os.path.exists(filepath):
         return (False, f"文件不存在: {filepath}")
     if not os.path.isfile(filepath):
         return (False, f"不是文件: {filepath}")
 
-    # 方式1: 旧版 Windows 照片查看器（最轻量，纯查看，支持放大缩小/旋转，无需文件关联）
-    photoviewer_paths = [
-        r"C:\Program Files\Windows Photo Viewer\PhotoViewer.dll",
-        r"C:\Program Files (x86)\Windows Photo Viewer\PhotoViewer.dll",
-    ]
-    pv_found = False
-    for pv_path in photoviewer_paths:
+    # 旧版 Windows 照片查看器（首选，无需文件关联，支持放大缩小）
+    for pv_path in [r"C:\Program Files\Windows Photo Viewer\PhotoViewer.dll",
+                     r"C:\Program Files (x86)\Windows Photo Viewer\PhotoViewer.dll"]:
         if os.path.exists(pv_path):
-            pv_found = True
             try:
                 proc = subprocess.Popen(
                     ['rundll32.exe', pv_path, 'ImageView_Fullscreen', filepath],
-                    creationflags=CREATE_FLAGS,
-                    close_fds=True
+                    creationflags=CREATE_FLAGS, close_fds=True
                 )
                 time.sleep(0.3)
-                # 启动后自动调整窗口大小并居中
                 win_w, win_h = _get_image_window_size()
                 resized = _resize_window_by_pid(proc.pid, win_w, win_h)
                 size_info = f"（窗口 {win_w}×{win_h}，居中）" if resized else ""
                 return (True, f"Windows照片查看器打开{size_info}")
             except Exception as e:
                 errors.append(f"photoviewer: {e}")
-            break  # 找到了dll，不用试另一个路径
-    if not pv_found:
+            break
+    else:
         errors.append("photoviewer: 旧版照片查看器不存在")
 
-    # 方式2: 画图（系统自带，轻量，支持放大缩小，无需文件关联）
-    try:
-        subprocess.Popen(
-            ['mspaint.exe', filepath],
-            creationflags=CREATE_FLAGS,
-            close_fds=True
-        )
-        time.sleep(0.5)
-        return (True, "画图打开")
-    except Exception as e:
-        errors.append(f"mspaint: {e}")
+    # 备用打开方式，按优先级尝试
+    fallback_methods = [
+        ("画图", ['mspaint.exe', filepath], 0.5),
+        ("默认程序", None, 0.5),  # os.startfile 特殊处理
+        ("资源管理器", ['explorer.exe', filepath], 0.8),
+        ("浏览器", None, 0.5),    # webbrowser 特殊处理
+    ]
 
-    # 方式3: os.startfile（可能弹出"打开方式"对话框，作为兜底）
-    try:
-        os.startfile(filepath)
-        time.sleep(0.5)
-        return (True, "默认程序打开")
-    except Exception as e:
-        errors.append(f"os.startfile: {e}")
-
-    # 方式4: explorer.exe 打开文件
-    try:
-        subprocess.Popen(
-            ['explorer.exe', filepath],
-            creationflags=CREATE_FLAGS,
-            close_fds=True
-        )
-        time.sleep(0.8)
-        return (True, "资源管理器打开")
-    except Exception as e:
-        errors.append(f"explorer: {e}")
-
-    # 方式5: 默认浏览器打开（浏览器可显示图片）
-    try:
-        webbrowser.open(f'file:///{filepath.replace(os.sep, "/")}')
-        time.sleep(0.5)
-        return (True, "浏览器打开")
-    except Exception as e:
-        errors.append(f"webbrowser: {e}")
+    for name, cmd, wait_time in fallback_methods:
+        try:
+            if name == "默认程序":
+                os.startfile(filepath)
+            elif name == "浏览器":
+                webbrowser.open(f'file:///{filepath.replace(os.sep, "/")}')
+            else:
+                subprocess.Popen(cmd, creationflags=CREATE_FLAGS, close_fds=True)
+            time.sleep(wait_time)
+            return (True, f"{name}打开")
+        except Exception as e:
+            errors.append(f"{name}: {e}")
 
     return (False, "所有打开方式均失败: " + "; ".join(errors))
 
@@ -980,7 +948,6 @@ def chat_stream(user_input: str) -> str:
             # 收集流式响应
             assistant_content = ""
             tool_calls = []
-            current_tool_call = None
 
             for line in resp.iter_lines(decode_unicode=True):
                 parsed = _parse_stream_line(line)
@@ -990,12 +957,11 @@ def chat_stream(user_input: str) -> str:
                 if content == "__done__":
                     break
 
-                # 文本内容
                 if content:
                     assistant_content += content
                     print(content, end="", flush=True)
 
-                # 工具调用（仅 OpenAI 兼容格式）
+                # 工具调用（仅 OpenAI 兼容格式，Anthropic 不返回此字段）
                 if delta_tool_calls:
                     for tc in delta_tool_calls:
                         idx = tc.get("index", 0)
@@ -1012,16 +978,14 @@ def chat_stream(user_input: str) -> str:
                         if "arguments" in fn:
                             tool_calls[idx]["function"]["arguments"] += fn["arguments"]
 
-            print()  # 换行
+            print()
 
-            # 如果有工具调用，执行工具
             if tool_calls:
-                # 保存助手消息（包含工具调用）
+                # 保存助手消息（含工具调用），供下一轮 LLM 调用使用
                 assistant_msg = {"role": "assistant", "content": assistant_content or None}
                 assistant_msg["tool_calls"] = tool_calls
                 messages.append(assistant_msg)
 
-                # 执行每个工具
                 for tc in tool_calls:
                     tool_name = tc["function"]["name"]
                     try:

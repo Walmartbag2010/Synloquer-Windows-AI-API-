@@ -121,7 +121,7 @@ _OPENAI_COMPATIBLE_PROVIDERS = {
 
 ### 步骤 1：定义工具函数
 
-在 `terminal_chat.py` 的工具函数区域添加：
+在 `synloquer.py` 的工具函数区域添加：
 
 ```python
 def tool_weather(city: str, days: int = 1) -> str:
@@ -220,7 +220,7 @@ TOOL_FUNCTIONS = {
 }
 ```
 
-### 步骤 2：在 terminal_chat.py 中读取
+### 步骤 2：在 synloquer.py 中读取
 
 在配置加载区域添加：
 
@@ -256,7 +256,7 @@ if OPTION1 == "value1":
 
 ### 方法 2：修改代码默认值
 
-在 `terminal_chat.py` 中修改默认值：
+在 `synloquer.py` 中修改默认值：
 
 ```python
 SYSTEM_PROMPT = CONFIG.get("system_prompt", "你的默认系统提示词")
@@ -274,7 +274,7 @@ SYSTEM_PROMPT = CONFIG.get("system_prompt", "你的默认系统提示词")
 
 ### 文件结构
 
-所有逻辑集中在 `terminal_chat.py` 单文件中，按区域组织：
+所有逻辑集中在 `synloquer.py` 单文件中，按区域组织：
 
 ```
 # ================== 配置 ==================
