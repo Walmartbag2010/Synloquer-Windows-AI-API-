@@ -216,6 +216,21 @@ silver-telegram/
 
 
 
+## 技术文档
+
+完整的技术文档位于 [`docs/`](docs/) 目录：
+
+| 文档 | 内容 |
+|------|------|
+| [架构概览](docs/architecture.md) | 整体架构、数据流、核心设计决策 |
+| [Provider 适配层](docs/provider-adapter.md) | 多模型服务商适配，三种 API 模式详解 |
+| [工具调用系统](docs/tool-system.md) | 5 个内置工具详解，工具分发机制 |
+| [长期记忆系统](docs/memory-system.md) | 记忆加载/更新/安全机制 |
+| [配置系统](docs/configuration.md) | config.json 和 .env 配置详解 |
+| [扩展指南](docs/extension-guide.md) | 添加新服务商、新工具、新配置 |
+
+
+
 ## 声明
 
 
