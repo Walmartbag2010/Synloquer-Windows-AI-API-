@@ -1,12 +1,14 @@
 """
 Synloquer 工具调用系统
 
-5个内置工具：
-1. web_search - 博查联网搜索
-2. read_file  - 读取本地文件
-3. list_files - 列出目录文件（按类型分组）
-4. calculator - 安全计算器
-5. show_image - 新窗口展示图片
+7个内置工具：
+1. web_search       - 博查联网搜索
+2. read_file        - 读取本地文件
+3. list_files       - 列出目录文件（按类型分组）
+4. calculator       - 安全计算器
+5. show_image       - 新窗口展示图片
+6. word_frequency   - 词汇统计（中文分词+词频分析）
+7. generate_wordcloud - 词云图生成（自动展示）
 """
 
 import json
@@ -99,6 +101,39 @@ TOOLS = [
                     "source": {"type": "string", "description": "图片URL或本地文件路径"},
                 },
                 "required": ["source"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "word_frequency",
+            "description": "词汇统计分析，对文本进行中文分词（jieba）和词频统计，返回高频词汇列表。支持直接传入文本或从文件读取。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "要分析的文本内容（与 filepath 二选一）"},
+                    "filepath": {"type": "string", "description": "要分析的文件路径（与 text 二选一）"},
+                    "top_n": {"type": "integer", "description": "返回前N个高频词，默认20", "default": 20},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_wordcloud",
+            "description": "生成词云图，对文本分词统计词频后生成可视化词云图片，自动在新窗口展示。支持直接传入文本或从文件读取。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "要生成词云的文本内容（与 filepath 二选一）"},
+                    "filepath": {"type": "string", "description": "要分析的文件路径（与 text 二选一）"},
+                    "width": {"type": "integer", "description": "图片宽度，默认800", "default": 800},
+                    "height": {"type": "integer", "description": "图片高度，默认600", "default": 600},
+                    "background_color": {"type": "string", "description": "背景颜色，默认white", "default": "white"},
+                    "max_words": {"type": "integer", "description": "词云最大词数，默认100", "default": 100},
+                },
             },
         },
     },
@@ -419,6 +454,200 @@ def tool_show_image(source: str) -> str:
         return f"展示图片失败: {str(e)}"
 
 
+# ================== 词汇统计与词云图 ==================
+
+# 中文停用词（常见无意义词）
+_STOPWORDS_ZH = {
+    "的", "了", "在", "是", "我", "有", "和", "就", "不", "人", "都", "一", "一个",
+    "上", "也", "很", "到", "说", "要", "去", "你", "会", "着", "没有", "看", "好",
+    "自己", "这", "那", "他", "她", "它", "们", "这个", "那个", "什么", "怎么",
+    "可以", "因为", "所以", "但是", "如果", "虽然", "而且", "或者", "还是", "已经",
+    "不是", "不会", "不要", "能", "吧", "呢", "啊", "吗", "啦", "呀", "哦", "嗯",
+    "把", "被", "让", "给", "从", "向", "对", "与", "及", "等", "之", "其", "此",
+    "中", "里", "内", "外", "前", "后", "上", "下", "左", "右", "之间", "以后", "以前",
+    "现在", "今天", "昨天", "明天", "时候", "时间", "地方", "东西", "事情", "问题",
+    "知道", "觉得", "认为", "感觉", "想", "认为", "应该", "可能", "大概", "也许",
+    "通过", "进行", "开始", "结束", "需要", "使用", "利用", "采用", "选择", "决定",
+}
+
+# 英文停用词
+_STOPWORDS_EN = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "must", "shall", "can", "need", "dare",
+    "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them",
+    "my", "your", "his", "its", "our", "their", "this", "that", "these", "those",
+    "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
+    "all", "each", "every", "both", "few", "more", "most", "other", "some", "such",
+    "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very",
+    "and", "but", "or", "if", "because", "as", "until", "while", "of", "at", "by",
+    "for", "with", "about", "against", "between", "into", "through", "during",
+    "before", "after", "above", "below", "to", "from", "up", "down", "in", "out",
+    "on", "off", "over", "under", "again", "further", "then", "once", "here", "there",
+    "just", "also", "now", "well", "back", "even", "still", "way", "take", "come",
+    "make", "like", "time", "know", "think", "see", "get", "go", "one", "new",
+}
+
+
+def _get_text_from_input(text: str = None, filepath: str = None) -> str:
+    """从文本参数或文件路径获取待分析文本"""
+    if text:
+        return text
+    if filepath:
+        p = _resolve_path(filepath)
+        if not p.exists():
+            raise FileNotFoundError(f"文件不存在: {p}")
+        with open(p, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    raise ValueError("必须提供 text 或 filepath 参数")
+
+
+def _tokenize(text: str) -> list:
+    """中英文混合分词，返回词语列表"""
+    import re
+    words = []
+
+    # 提取中文段落，用 jieba 分词
+    chinese_segments = re.findall(r'[\u4e00-\u9fff]+', text)
+    if chinese_segments:
+        import jieba
+        for seg in chinese_segments:
+            for w in jieba.cut(seg):
+                w = w.strip()
+                if len(w) >= 2 and w not in _STOPWORDS_ZH:
+                    words.append(w)
+
+    # 提取英文单词
+    english_words = re.findall(r'[a-zA-Z]+', text.lower())
+    for w in english_words:
+        if len(w) >= 2 and w not in _STOPWORDS_EN:
+            words.append(w)
+
+    # 提取数字
+    numbers = re.findall(r'\d+', text)
+    words.extend(numbers)
+
+    return words
+
+
+def _count_frequency(words: list, top_n: int = 20) -> list:
+    """统计词频，返回 top_n 个 (词, 频次) 元组列表"""
+    from collections import Counter
+    counter = Counter(words)
+    return counter.most_common(top_n)
+
+
+def tool_word_frequency(text: str = None, filepath: str = None, top_n: int = 20) -> str:
+    """词汇统计分析"""
+    try:
+        content = _get_text_from_input(text, filepath)
+        words = _tokenize(content)
+
+        if not words:
+            return "未提取到有效词汇（文本可能过短或全为停用词）。"
+
+        freq_list = _count_frequency(words, top_n)
+        total_words = len(words)
+        unique_words = len(set(words))
+
+        lines = [
+            f"词汇统计结果",
+            f"总词数: {total_words}",
+            f"不重复词数: {unique_words}",
+            f"",
+            f"Top {min(top_n, len(freq_list))} 高频词:",
+            f"",
+        ]
+
+        # 计算最大频次用于进度条
+        max_freq = freq_list[0][1] if freq_list else 1
+
+        for idx, (word, freq) in enumerate(freq_list, 1):
+            percentage = (freq / total_words * 100) if total_words > 0 else 0
+            bar_len = int(freq / max_freq * 20)
+            bar = "█" * bar_len + "░" * (20 - bar_len)
+            lines.append(f"{idx:2d}. {word:<10s} {freq:>4d}次 ({percentage:5.1f}%) {bar}")
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"词汇统计失败: {e}")
+        return f"词汇统计失败: {str(e)}"
+
+
+def _find_chinese_font() -> str:
+    """自动检测系统中可用的中文字体路径"""
+    font_candidates = [
+        r"C:\Windows\Fonts\msyh.ttc",      # 微软雅黑
+        r"C:\Windows\Fonts\msyhbd.ttc",    # 微软雅黑粗体
+        r"C:\Windows\Fonts\simhei.ttf",    # 黑体
+        r"C:\Windows\Fonts\simsun.ttc",    # 宋体
+        r"C:\Windows\Fonts\simkai.ttf",    # 楷体
+        r"C:\Windows\Fonts\Deng.ttf",      # 等线
+        r"C:\Windows\Fonts\Dengb.ttf",     # 等线粗体
+    ]
+    for font_path in font_candidates:
+        if os.path.exists(font_path):
+            return font_path
+    return ""
+
+
+def tool_generate_wordcloud(text: str = None, filepath: str = None,
+                            width: int = 800, height: int = 600,
+                            background_color: str = "white",
+                            max_words: int = 100) -> str:
+    """生成词云图并自动展示"""
+    try:
+        content = _get_text_from_input(text, filepath)
+        words = _tokenize(content)
+
+        if not words:
+            return "未提取到有效词汇，无法生成词云图。"
+
+        # 统计词频
+        from collections import Counter
+        freq_dict = dict(Counter(words).most_common(max_words))
+
+        # 检测中文字体
+        font_path = _find_chinese_font()
+        if not font_path:
+            return "未找到中文字体，无法生成中文词云图。请确保系统安装了中文字体。"
+
+        # 生成词云
+        from wordcloud import WordCloud
+        wc = WordCloud(
+            font_path=font_path,
+            width=width,
+            height=height,
+            background_color=background_color,
+            max_words=max_words,
+            collocations=False,  # 不统计搭配，避免重复
+            prefer_horizontal=0.7,
+        )
+        wc.generate_from_frequencies(freq_dict)
+
+        # 保存图片
+        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_images")
+        os.makedirs(temp_dir, exist_ok=True)
+        timestamp = int(time.time())
+        image_path = os.path.join(temp_dir, f"wordcloud_{timestamp}.png")
+        wc.to_file(image_path)
+
+        # 自动展示图片
+        success, msg = _open_image_file(image_path)
+        show_info = f"打开方式: {msg}" if success else f"展示失败: {msg}"
+
+        return (
+            f"词云图已生成\n"
+            f"保存路径: {image_path}\n"
+            f"图片尺寸: {width}×{height}\n"
+            f"词汇数量: {len(freq_dict)}\n"
+            f"{show_info}"
+        )
+    except Exception as e:
+        logger.error(f"词云图生成失败: {e}")
+        return f"词云图生成失败: {str(e)}"
+
+
 # ================== 工具分发 ==================
 
 TOOL_FUNCTIONS = {
@@ -427,6 +656,8 @@ TOOL_FUNCTIONS = {
     "list_files": tool_list_files,
     "calculator": tool_calculator,
     "show_image": tool_show_image,
+    "word_frequency": tool_word_frequency,
+    "generate_wordcloud": tool_generate_wordcloud,
 }
 
 
