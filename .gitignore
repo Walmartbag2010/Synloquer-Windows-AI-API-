@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+agent_env/
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
+
+# 系统文件
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# API 密钥与环境变量
+.env
+.env.local
+*.key
+
+# 对话记录与记忆（含隐私，不上传）
+chat_logs/
+summaries/
+chat_history.md
+memory.md
+memory.md.bak
+memory.md.restore_bak
+
+# 临时文件
+temp_images/
+*.tmp
+*.log
+
+# 工作区（用户本地文件）
+workspace/
+
+# 早期 Web 版本（已弃用）
+chat_app/
+
+# 早期版本脚本（可选保留，如需上传请注释下行）
+# agent.py
+# My_AGENT_2.py
+# launcher.bat
+
+# 截图与临时图片
+*screenshot*.png
+*uploaded_image*
