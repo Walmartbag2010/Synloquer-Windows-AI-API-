@@ -8,6 +8,21 @@
 
 
 
+**发音**　英 /sɪnˈləʊkə(r)/　美 /sɪnˈloʊkər/　音节：Syn‑lo‑quer　重音：第二音节　谐音：辛‑洛‑克儿
+
+
+
+> **Etymology**
+> `syn‑` (Greek: mutual, joint, two‑way)
+> + `loqu‑` (Latin: to speak, converse)
+> + `‑er` (agent suffix: a tool or performer)
+>
+> Synloquer — A two‑way conversation tool, an AI chat client built for Windows Terminal.
+
+Synloquer 取自词根组合：syn‑双向同步 + loqu‑交谈 + ‑er工具执行者。寓意一款运行于 Windows 终端、实现人与大模型双向对话的 AI 聊天室程序。
+
+
+
 > 一个轻量化的终端 LLM 聊天窗口。漆黑的，安静的，只属于你的。
 
 
@@ -29,6 +44,8 @@
 
 
 ## 这是什么
+
+**Synloquer · 终端双向对话助手**　—　Two‑way AI chat in your terminal.
 
 
 
