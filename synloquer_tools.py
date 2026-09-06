@@ -1,14 +1,17 @@
 """
 Synloquer 工具调用系统
 
-7个内置工具：
-1. web_search       - 博查联网搜索
-2. read_file        - 读取本地文件
-3. list_files       - 列出目录文件（按类型分组）
-4. calculator       - 安全计算器
-5. show_image       - 新窗口展示图片
-6. word_frequency   - 词汇统计（中文分词+词频分析）
+10个内置工具：
+1. web_search         - 博查联网搜索
+2. read_file          - 读取本地文件
+3. list_files         - 列出目录文件（按类型分组）
+4. calculator         - 安全计算器
+5. show_image         - 新窗口展示图片
+6. word_frequency     - 词汇统计（中文分词+词频分析）
 7. generate_wordcloud - 词云图生成（自动展示）
+8. chat_time_stats    - 对话时间统计
+9. search_chat_history - 历史对话检索与排序
+10. summarize_data     - 数据整理（调用flash模型压缩）
 """
 
 import json
@@ -134,6 +137,54 @@ TOOLS = [
                     "background_color": {"type": "string", "description": "背景颜色，默认white", "default": "white"},
                     "max_words": {"type": "integer", "description": "词云最大词数，默认100", "default": 100},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "chat_time_stats",
+            "description": "对话时间统计，扫描本地历史对话记录，按小时/天/周统计对话次数和消息量，生成时间分布图表。不读取对话全文，只解析元信息，节省token。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "granularity": {"type": "string", "description": "统计粒度：hour(按小时)/day(按天)/week(按周)，默认day", "default": "day"},
+                    "days": {"type": "integer", "description": "统计最近多少天，默认30", "default": 30},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_chat_history",
+            "description": "历史对话检索与排序，在本地对话记录中按关键词搜索，按时间排序返回摘要列表（只返回时间/主题/轮次/匹配片段，不返回全文，避免占用token）。可指定时间范围和最大返回条数。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keyword": {"type": "string", "description": "搜索关键词（支持多个关键词，空格分隔）"},
+                    "start_date": {"type": "string", "description": "开始日期，格式YYYY-MM-DD，可选"},
+                    "end_date": {"type": "string", "description": "结束日期，格式YYYY-MM-DD，可选"},
+                    "max_results": {"type": "integer", "description": "最大返回条数，默认10", "default": 10},
+                    "sort_by": {"type": "string", "description": "排序方式：time(按时间倒序)/relevance(按相关度)，默认time", "default": "time"},
+                },
+                "required": ["keyword"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "summarize_data",
+            "description": "数据整理工具，调用快速模型(flash)对大量文本数据进行整理、压缩、摘要、结构化。适用于需要处理大量数据但不想占用主模型(pro)上下文的场景。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "data": {"type": "string", "description": "需要整理的原始数据文本"},
+                    "instruction": {"type": "string", "description": "整理要求，如'总结要点'、'提取关键数据'、'压缩到200字以内'、'按类别分组'等"},
+                    "max_tokens": {"type": "integer", "description": "输出最大token数，默认1024", "default": 1024},
+                },
+                "required": ["data", "instruction"],
             },
         },
     },
@@ -648,6 +699,254 @@ def tool_generate_wordcloud(text: str = None, filepath: str = None,
         return f"词云图生成失败: {str(e)}"
 
 
+# ================== 对话统计与历史检索 ==================
+
+def _parse_chat_log_meta(filepath: str) -> dict:
+    """解析对话记录文件的元信息（不读取全文，节省资源）"""
+    try:
+        filename = os.path.basename(filepath)
+        # 从文件名解析时间：chat_YYYYMMDD_HHMMSS.md
+        import re
+        match = re.match(r'chat_(\d{8})_(\d{6})\.md', filename)
+        if not match:
+            return None
+        date_str, time_str = match.groups()
+        timestamp = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]} {time_str[:2]}:{time_str[2:4]}:{time_str[4:6]}"
+
+        # 只读取文件前20行获取元信息
+        topic = "未命名"
+        msg_count = 0
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            for i, line in enumerate(f):
+                if i > 20:
+                    break
+                if "对话主题" in line:
+                    topic = line.split(":", 1)[-1].strip().strip("*")
+                elif "消息轮次" in line:
+                    try:
+                        msg_count = int(re.search(r'\d+', line).group())
+                    except (AttributeError, ValueError):
+                        pass
+
+        return {
+            "filepath": filepath,
+            "filename": filename,
+            "timestamp": timestamp,
+            "date": date_str,
+            "hour": int(time_str[:2]),
+            "topic": topic[:50],
+            "msg_count": msg_count,
+            "size": os.path.getsize(filepath),
+        }
+    except Exception:
+        return None
+
+
+def _get_all_chat_logs() -> list:
+    """获取所有对话记录的元信息列表，按时间倒序"""
+    chat_log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat_logs")
+    if not os.path.exists(chat_log_dir):
+        return []
+
+    logs = []
+    for filename in os.listdir(chat_log_dir):
+        if filename.startswith("chat_") and filename.endswith(".md"):
+            meta = _parse_chat_log_meta(os.path.join(chat_log_dir, filename))
+            if meta:
+                logs.append(meta)
+
+    logs.sort(key=lambda x: x["timestamp"], reverse=True)
+    return logs
+
+
+def tool_chat_time_stats(granularity: str = "day", days: int = 30) -> str:
+    """对话时间统计"""
+    try:
+        logs = _get_all_chat_logs()
+        if not logs:
+            return "暂无对话记录。"
+
+        # 按时间范围过滤
+        from datetime import datetime, timedelta
+        cutoff = datetime.now() - timedelta(days=days)
+        filtered = [l for l in logs if datetime.strptime(l["timestamp"], "%Y-%m-%d %H:%M:%S") >= cutoff]
+
+        if not filtered:
+            return f"最近 {days} 天内暂无对话记录。"
+
+        # 按粒度统计
+        from collections import defaultdict
+        stats = defaultdict(lambda: {"count": 0, "messages": 0})
+
+        for log in filtered:
+            if granularity == "hour":
+                key = log["timestamp"][:13]  # YYYY-MM-DD HH
+            elif granularity == "week":
+                dt = datetime.strptime(log["timestamp"], "%Y-%m-%d %H:%M:%S")
+                week_start = dt - timedelta(days=dt.weekday())
+                key = week_start.strftime("%Y-%m-%d")
+            else:  # day
+                key = log["date"][:4] + "-" + log["date"][4:6] + "-" + log["date"][6:8]
+
+            stats[key]["count"] += 1
+            stats[key]["messages"] += log["msg_count"]
+
+        # 排序
+        sorted_keys = sorted(stats.keys())
+
+        # 生成统计结果
+        total_chats = len(filtered)
+        total_messages = sum(l["msg_count"] for l in filtered)
+        max_count = max(v["count"] for v in stats.values())
+
+        lines = [
+            f"对话时间统计（最近 {days} 天，按{granularity}统计）",
+            f"",
+            f"总对话次数: {total_chats}",
+            f"总消息轮次: {total_messages}",
+            f"统计区间: {len(sorted_keys)} 个{granularity}",
+            f"",
+            f"{'时间':<16s} {'对话次数':>8s} {'消息轮次':>8s}  分布",
+            f"{'-'*16} {'-'*8} {'-'*8}  {'-'*20}",
+        ]
+
+        for key in sorted_keys:
+            s = stats[key]
+            bar_len = int(s["count"] / max_count * 20) if max_count > 0 else 0
+            bar = "█" * bar_len + "░" * (20 - bar_len)
+            label = key if granularity != "hour" else key + ":00"
+            lines.append(f"{label:<16s} {s['count']:>8d} {s['messages']:>8d}  {bar}")
+
+        # 活跃时段分析（按小时）
+        if granularity == "day":
+            hour_stats = defaultdict(int)
+            for log in filtered:
+                hour_stats[log["hour"]] += 1
+            if hour_stats:
+                peak_hour = max(hour_stats, key=hour_stats.get)
+                lines.append("")
+                lines.append(f"最活跃时段: {peak_hour}:00-{peak_hour+1}:00（{hour_stats[peak_hour]}次对话）")
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"对话时间统计失败: {e}")
+        return f"对话时间统计失败: {str(e)}"
+
+
+def tool_search_chat_history(keyword: str, start_date: str = None, end_date: str = None,
+                              max_results: int = 10, sort_by: str = "time") -> str:
+    """历史对话检索与排序"""
+    try:
+        logs = _get_all_chat_logs()
+        if not logs:
+            return "暂无对话记录。"
+
+        # 按日期过滤
+        if start_date:
+            logs = [l for l in logs if l["date"] >= start_date.replace("-", "")]
+        if end_date:
+            logs = [l for l in logs if l["date"] <= end_date.replace("-", "")]
+
+        if not logs:
+            return "指定时间范围内暂无对话记录。"
+
+        # 关键词搜索（在主题和文件内容中搜索）
+        keywords = [kw.strip().lower() for kw in keyword.split() if kw.strip()]
+        scored_logs = []
+
+        for log in logs:
+            score = 0
+            matched_snippets = []
+
+            # 主题匹配
+            topic_lower = log["topic"].lower()
+            for kw in keywords:
+                if kw in topic_lower:
+                    score += 10
+                    matched_snippets.append(f"主题: {log['topic']}")
+
+            # 内容匹配（只读取前500行搜索，避免大文件卡顿）
+            try:
+                with open(log["filepath"], "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read(50000)  # 只读前50KB
+                content_lower = content.lower()
+                for kw in keywords:
+                    if kw in content_lower:
+                        score += 5
+                        # 提取匹配片段
+                        idx = content_lower.find(kw)
+                        start = max(0, idx - 20)
+                        end = min(len(content), idx + len(kw) + 30)
+                        snippet = content[start:end].replace("\n", " ").strip()
+                        matched_snippets.append(f"...{snippet}...")
+            except Exception:
+                pass
+
+            if score > 0:
+                scored_logs.append((log, score, matched_snippets[:2]))
+
+        if not scored_logs:
+            return f"未找到包含关键词 '{keyword}' 的对话记录。"
+
+        # 排序
+        if sort_by == "relevance":
+            scored_logs.sort(key=lambda x: x[1], reverse=True)
+        else:  # time
+            scored_logs.sort(key=lambda x: x[0]["timestamp"], reverse=True)
+
+        # 限制返回数量
+        scored_logs = scored_logs[:max_results]
+
+        # 生成结果
+        lines = [
+            f"历史对话检索结果",
+            f"关键词: {keyword}",
+            f"匹配数量: {len(scored_logs)} 条（共扫描 {len(logs)} 条记录）",
+            f"排序方式: {'相关度' if sort_by == 'relevance' else '时间倒序'}",
+            f"",
+        ]
+
+        for idx, (log, score, snippets) in enumerate(scored_logs, 1):
+            lines.append(f"{idx}. [{log['timestamp']}] {log['topic']}")
+            lines.append(f"   消息轮次: {log['msg_count']} | 相关度: {score}")
+            if snippets:
+                for snippet in snippets:
+                    lines.append(f"   匹配: {snippet}")
+            lines.append("")
+
+        lines.append(f"提示: 使用 read_file 工具读取完整对话内容，文件路径: chat_logs/")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"历史对话检索失败: {e}")
+        return f"历史对话检索失败: {str(e)}"
+
+
+def tool_summarize_data(data: str, instruction: str, max_tokens: int = 1024) -> str:
+    """数据整理工具，调用 flash 模型整理压缩数据"""
+    try:
+        prompt = (
+            f"请按照以下要求整理数据：\n"
+            f"要求: {instruction}\n\n"
+            f"原始数据：\n{data}\n\n"
+            f"请直接输出整理后的结果，不要输出解释或多余文字。"
+        )
+
+        # 调用 flash 模型
+        import synloquer_provider as provider
+        result = provider.chat_non_stream_request(
+            model=config.model_summary,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=max_tokens,
+            thinking_disabled=True,
+        )
+
+        return result.strip()
+    except Exception as e:
+        logger.error(f"数据整理失败: {e}")
+        return f"数据整理失败: {str(e)}"
+
+
 # ================== 工具分发 ==================
 
 TOOL_FUNCTIONS = {
@@ -658,6 +957,9 @@ TOOL_FUNCTIONS = {
     "show_image": tool_show_image,
     "word_frequency": tool_word_frequency,
     "generate_wordcloud": tool_generate_wordcloud,
+    "chat_time_stats": tool_chat_time_stats,
+    "search_chat_history": tool_search_chat_history,
+    "summarize_data": tool_summarize_data,
 }
 
 
