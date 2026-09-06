@@ -8,21 +8,6 @@
 
 
 
-**发音**　英 /sɪnˈləʊkə(r)/　美 /sɪnˈloʊkər/　音节：Syn‑lo‑quer　重音：第二音节　谐音：辛‑洛‑克儿
-
-
-
-> **Etymology**
-> `syn‑` (Greek: mutual, joint, two‑way)
-> + `loqu‑` (Latin: to speak, converse)
-> + `‑er` (agent suffix: a tool or performer)
->
-> Synloquer — A two‑way conversation tool, an AI chat client built for Windows Terminal.
-
-Synloquer 取自词根组合：syn‑双向同步 + loqu‑交谈 + ‑er工具执行者。寓意一款运行于 Windows 终端、实现人与大模型双向对话的 AI 聊天室程序。
-
-
-
 > 一个轻量化的终端 LLM 聊天窗口。漆黑的，安静的，只属于你的。
 
 
@@ -40,6 +25,8 @@ Synloquer 取自词根组合：syn‑双向同步 + loqu‑交谈 + ‑er工具�
 
 
 随心所欲，不用承担任何责任。这里没有听众，所以也就没有表演。你可以是最无聊的人，也可以是最锋利的人；可以打一半就删掉，也可以发出去之后才发现那其实不是你想说的。都没有关系。漆黑窗口的好处在于，它从不替你记住，所以你说的每一句，都只属于说出口的那一秒。
+
+（Synloquer 这个词不会读？没关系，翻到结尾处有发音。）
 
 
 
@@ -253,3 +240,29 @@ silver-telegram/
 
 
 本项目为 AI vibe coding 产物。
+
+
+
+## 附录：关于 Synloquer
+
+### 发音
+
+- **国际音标**：英 /sɪnˈləʊkə(r)/　美 /sɪnˈloʊkər/
+- **音节划分**：Syn‑lo‑quer（3 个音节）
+- **重音位置**：第二个音节 `lo`
+- **上口谐音**：辛‑洛‑克儿
+
+### 词源
+
+> **Etymology**
+> `syn‑` (Greek prefix: mutual, joint, two‑way)
+> + `loqu‑` (Latin root: to speak, converse)
+> + `‑er` (agent suffix, means a tool or performer)
+>
+> Synloquer — A two‑way conversation tool, an AI chat client built for Windows Terminal.
+
+Synloquer 取自词根组合：syn‑双向同步 + loqu‑交谈 + ‑er工具执行者。寓意一款运行于 Windows 终端、实现人与大模型双向对话的 AI 聊天室程序。
+
+### 标语
+
+**Synloquer · 终端双向对话助手**　—　Two‑way AI chat in your terminal.
