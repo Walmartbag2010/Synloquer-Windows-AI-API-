@@ -72,7 +72,10 @@ echo.
 echo   3. models.chat    : 对话模型名称（如 deepseek-v4-pro）
 echo   4. models.summary : 总结模型名称（如 deepseek-v4-flash）
 echo.
-echo   5. image_window   : 图片窗口大小比例（可选修改）
+echo   5. chat_prefix.user      : 用户输入前缀（默认 "我："）
+echo   6. chat_prefix.assistant : AI 回复前缀（默认 "AI："）
+echo.
+echo   7. image_window   : 图片窗口大小比例（可选修改）
 echo.
 echo   填写完成后，保存并关闭记事本，程序将继续...
 echo ============================================================

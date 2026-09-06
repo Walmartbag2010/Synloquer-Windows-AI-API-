@@ -94,6 +94,11 @@ MODEL_SUMMARY = MODELS.get("summary", "deepseek-v4-flash")
 # 系统提示词
 SYSTEM_PROMPT = CONFIG.get("system_prompt", "不要使用Markdown格式。")
 
+# 对话前缀（可自定义）
+CHAT_PREFIX_CONFIG = CONFIG.get("chat_prefix", {})
+USER_PREFIX = CHAT_PREFIX_CONFIG.get("user", "我：")
+AI_PREFIX = CHAT_PREFIX_CONFIG.get("assistant", "AI：")
+
 # 搜索工具配置
 SEARCH_CONFIG = CONFIG.get("search", {})
 SEARCH_PROVIDER = SEARCH_CONFIG.get("provider", "bocha")
@@ -759,6 +764,7 @@ def print_header():
     else:
         print("  [警告] 未找到 .env 密钥文件，请检查 config.json 中的 env_file_path")
     print(f"  搜索: {SEARCH_PROVIDER} | 工具: 搜索/文件读取/文件列表/计算器/图片")
+    print(f"  对话前缀: 用户=\"{USER_PREFIX}\" AI=\"{AI_PREFIX}\"")
     if memory:
         print(f"  长期记忆: 已加载 ({len(memory)} 字符)")
     else:
@@ -779,7 +785,7 @@ def chat_stream(user_input: str) -> str:
 
     while tool_round < max_tool_rounds:
         tool_round += 1
-        print("AI：", end="", flush=True)
+        print(AI_PREFIX, end="", flush=True)
 
         try:
             resp = requests.post(
@@ -940,9 +946,9 @@ def summarize_conversation() -> str:
     conversation_lines = []
     for msg in messages:
         if msg["role"] == "user":
-            conversation_lines.append(f"我：{msg['content']}")
+            conversation_lines.append(f"{USER_PREFIX}{msg['content']}")
         elif msg["role"] == "assistant" and msg.get("content"):
-            conversation_lines.append(f"AI：{msg['content']}")
+            conversation_lines.append(f"{AI_PREFIX}{msg['content']}")
 
     conversation_text = "\n".join(conversation_lines)
     if not conversation_text.strip():
@@ -1075,7 +1081,7 @@ def main():
 
     while True:
         try:
-            user_input = input("我：").strip()
+            user_input = input(USER_PREFIX).strip()
         except (KeyboardInterrupt, EOFError):
             print()
             break
@@ -1094,9 +1100,9 @@ def main():
         conversation_lines = []
         for msg in messages:
             if msg["role"] == "user":
-                conversation_lines.append(f"我：{msg['content']}")
+                conversation_lines.append(f"{USER_PREFIX}{msg['content']}")
             elif msg["role"] == "assistant" and msg.get("content"):
-                conversation_lines.append(f"AI：{msg['content']}")
+                conversation_lines.append(f"{AI_PREFIX}{msg['content']}")
         conversation_text = "\n".join(conversation_lines)
 
         summary = summarize_conversation()

@@ -6,6 +6,10 @@
   },
   "provider": "deepseek",
   "system_prompt": "不要使用Markdown格式。",
+  "chat_prefix": {
+    "user": "我：",
+    "assistant": "AI："
+  },
   "image_window": {
     "width_ratio": 0.55,
     "height_ratio": 0.65,
