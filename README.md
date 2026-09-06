@@ -25,7 +25,7 @@
 - Windows 10/11
 - Python 3.10+
 
-### 步骤
+### 步骤（推荐：使用配置向导）
 
 1. 克隆仓库：
 ```bash
@@ -33,16 +33,19 @@ git clone <your-repo-url>
 cd My_Agent
 ```
 
-2. 创建虚拟环境并安装依赖：
-```bash
-python -m venv agent_env
-agent_env\Scripts\activate
-pip install -r requirements.txt
-```
+2. 双击运行 `首次配置.bat`，配置向导会自动：
+   - 获取当前工作目录
+   - 创建 Python 虚拟环境并安装依赖
+   - 从模板创建 `config.json`
+   - 用记事本打开 `config.json` 引导你填写配置
 
-3. 配置 API 密钥：
+3. 在记事本中填写：
+   - `env_file_path`：你的 `.env` 密钥文件完整路径
+   - `provider`：AI 服务商（deepseek / openai / anthropic 等）
+   - `models.chat` / `models.summary`：对话和总结模型
 
-复制 `.env.example` 为 `.env`，填入你的密钥。建议放在桌面（路径可在 `config.json` 中自定义）：
+4. 创建 `.env` 密钥文件：
+   复制 `.env.example` 为 `.env`，放到 `env_file_path` 指定的位置，填入密钥：
 ```env
 # DeepSeek
 DEEPSEEK_API_KEY=sk-你的deepseek密钥
@@ -53,6 +56,8 @@ BOCHA_API_KEY=sk-你的博查密钥
 ```
 
 > `.env.example` 已预格式化 8 家主流模型服务商（DeepSeek / OpenAI / Anthropic / 智谱 / 通义千问 / Moonshot / MiniMax / 百度文心）和 2 家搜索服务商（博查 / Tavily）的密钥位置，按需填写即可。
+
+5. 双击 `启动终端聊天.bat` 开始使用
 
 4. 配置模型与路径：
 
@@ -129,6 +134,7 @@ AI：[调用 calculator 工具] 128 的平方根约为 11.31
 My_Agent/
 ├── terminal_chat.py        # 主程序
 ├── 启动终端聊天.bat          # 启动脚本
+├── 首次配置.bat              # 首次配置向导（自动建环境+开配置文件）
 ├── config.example.json     # 配置模板（服务商/模型/路径/窗口大小）
 ├── config.json             # 实际配置（自动创建，不上传）
 ├── .env.example            # 密钥模板（8家模型服务商 + 2家搜索服务商）
