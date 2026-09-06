@@ -42,13 +42,42 @@ pip install -r requirements.txt
 
 3. 配置 API 密钥：
 
-在桌面创建 `.env` 文件（路径：`%USERPROFILE%\Desktop\.env`），内容如下：
-```
+复制 `.env.example` 为 `.env`，填入你的密钥。建议放在桌面（路径可在 `config.json` 中自定义）：
+```env
+# DeepSeek
 DEEPSEEK_API_KEY=sk-你的deepseek密钥
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+
+# 博查搜索
 BOCHA_API_KEY=sk-你的博查密钥
 ```
 
-> 密钥文件放在桌面而非项目目录，避免意外提交到 Git。
+> `.env.example` 已预格式化 8 家主流模型服务商（DeepSeek / OpenAI / Anthropic / 智谱 / 通义千问 / Moonshot / MiniMax / 百度文心）和 2 家搜索服务商（博查 / Tavily）的密钥位置，按需填写即可。
+
+4. 配置模型与路径：
+
+首次运行会自动从 `config.example.json` 创建 `config.json`，可编辑以下配置：
+```json
+{
+  "env_file_path": "D:\\路径\\到\\.env",
+  "provider": "deepseek",
+  "models": {
+    "chat": "deepseek-v4-pro",
+    "summary": "deepseek-v4-flash"
+  },
+  "system_prompt": "不要使用Markdown格式。",
+  "image_window": {
+    "width_ratio": 0.55,
+    "height_ratio": 0.65,
+    "max_width": 1100,
+    "max_height": 800
+  }
+}
+```
+
+**支持的服务商**：`deepseek` / `openai` / `anthropic` / `zhipu` / `qwen` / `moonshot` / `minimax` / `baidu`，切换 `provider` 字段即可，程序会自动读取对应的 `base_url` 和密钥。
+
+> `config.json` 已加入 `.gitignore`，不会上传到 GitHub。
 
 ## 使用方法
 
@@ -100,6 +129,9 @@ AI：[调用 calculator 工具] 128 的平方根约为 11.31
 My_Agent/
 ├── terminal_chat.py        # 主程序
 ├── 启动终端聊天.bat          # 启动脚本
+├── config.example.json     # 配置模板（服务商/模型/路径/窗口大小）
+├── config.json             # 实际配置（自动创建，不上传）
+├── .env.example            # 密钥模板（8家模型服务商 + 2家搜索服务商）
 ├── requirements.txt        # Python 依赖
 ├── .gitignore             # Git 忽略规则
 ├── README.md              # 本文件

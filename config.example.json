@@ -1,0 +1,68 @@
+{
+  "env_file_path": "D:\\HuaweiMoveData\\Users\\HUAWEI\\Desktop\\.env",
+  "models": {
+    "chat": "deepseek-v4-pro",
+    "summary": "deepseek-v4-flash"
+  },
+  "provider": "deepseek",
+  "system_prompt": "不要使用Markdown格式。",
+  "image_window": {
+    "width_ratio": 0.55,
+    "height_ratio": 0.65,
+    "max_width": 1100,
+    "max_height": 800
+  },
+  "available_providers": {
+    "deepseek": {
+      "base_url": "https://api.deepseek.com",
+      "env_key": "DEEPSEEK_API_KEY",
+      "models": ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-chat", "deepseek-reasoner"]
+    },
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "env_key": "OPENAI_API_KEY",
+      "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+    },
+    "anthropic": {
+      "base_url": "https://api.anthropic.com",
+      "env_key": "ANTHROPIC_API_KEY",
+      "models": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"]
+    },
+    "zhipu": {
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "env_key": "ZHIPU_API_KEY",
+      "models": ["glm-4-plus", "glm-4-flash", "glm-4-air"]
+    },
+    "qwen": {
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "env_key": "DASHSCOPE_API_KEY",
+      "models": ["qwen-max", "qwen-plus", "qwen-turbo", "qwen-long"]
+    },
+    "moonshot": {
+      "base_url": "https://api.moonshot.cn/v1",
+      "env_key": "MOONSHOT_API_KEY",
+      "models": ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"]
+    },
+    "minimax": {
+      "base_url": "https://api.minimax.chat/v1",
+      "env_key": "MINIMAX_API_KEY",
+      "models": ["MiniMax-Text-01", "abab6.5s-chat"]
+    },
+    "baidu": {
+      "base_url": "https://qianfan.baidubce.com/v2",
+      "env_key": "BAIDU_API_KEY",
+      "models": ["ernie-4.0", "ernie-3.5", "ernie-speed"]
+    }
+  },
+  "search": {
+    "provider": "bocha",
+    "bocha": {
+      "base_url": "https://api.bocha.cn/v1/web-search",
+      "env_key": "BOCHA_API_KEY"
+    },
+    "tavily": {
+      "base_url": "https://api.tavily.com/search",
+      "env_key": "TAVILY_API_KEY"
+    }
+  }
+}

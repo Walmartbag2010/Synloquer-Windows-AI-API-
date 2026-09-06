@@ -30,6 +30,11 @@ desktop.ini
 .env.local
 *.key
 
+# 配置文件（保留模板）
+config.json
+!config.example.json
+!.env.example
+
 # 对话记录与记忆（含隐私，不上传）
 chat_logs/
 summaries/

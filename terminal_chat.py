@@ -22,43 +22,90 @@ from pathlib import Path
 
 # ================== 配置 ==================
 
-def _load_env_from_desktop():
-    """从桌面 .env 文件加载 API 密钥（避免硬编码到代码中）"""
-    possible_paths = [
-        Path.home() / "Desktop" / ".env",
-        Path(os.environ.get("USERPROFILE", "")) / "Desktop" / ".env",
-        Path(r"D:\HuaweiMoveData\Users\HUAWEI\Desktop\.env"),
-    ]
-    for env_path in possible_paths:
-        try:
-            if env_path.exists():
-                with open(env_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            key, value = line.split("=", 1)
-                            os.environ.setdefault(key.strip(), value.strip())
-                return str(env_path)
-        except Exception:
-            continue
-    return None
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
+CONFIG_EXAMPLE = os.path.join(SCRIPT_DIR, "config.example.json")
 
-ENV_LOADED_FROM = _load_env_from_desktop()
 
-API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-BASE_URL = "https://api.deepseek.com"
-MODEL_CHAT = "deepseek-v4-pro"
-MODEL_SUMMARY = "deepseek-v4-flash"
+def _load_config() -> dict:
+    """加载 config.json，不存在则从 config.example.json 复制创建"""
+    if not os.path.exists(CONFIG_FILE):
+        if os.path.exists(CONFIG_EXAMPLE):
+            import shutil
+            shutil.copy2(CONFIG_EXAMPLE, CONFIG_FILE)
+            print(f"[配置] 已从 config.example.json 创建 config.json")
+        else:
+            return {}
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[配置] 读取 config.json 失败: {e}，使用默认配置")
+        return {}
 
-# 博查搜索
-BOCHA_API_KEY = os.environ.get("BOCHA_API_KEY", "")
-BOCHA_BASE_URL = "https://api.bocha.cn/v1/web-search"
 
-# 系统提示词：仅保留格式要求
-SYSTEM_PROMPT = "不要使用Markdown格式。"
+def _load_env_file(env_path: str) -> bool:
+    """从指定路径加载 .env 文件到环境变量"""
+    if not env_path or not os.path.exists(env_path):
+        return False
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+        return True
+    except Exception:
+        return False
+
+
+# 加载配置
+CONFIG = _load_config()
+
+# 从配置读取 env 文件路径，加载密钥
+ENV_PATH = CONFIG.get("env_file_path", "")
+ENV_LOADED = _load_env_file(ENV_PATH)
+if not ENV_LOADED:
+    # 兜底：尝试桌面默认路径
+    for fallback in [
+        str(Path.home() / "Desktop" / ".env"),
+        os.path.join(os.environ.get("USERPROFILE", ""), "Desktop", ".env"),
+        r"D:\HuaweiMoveData\Users\HUAWEI\Desktop\.env",
+    ]:
+        if _load_env_file(fallback):
+            ENV_PATH = fallback
+            ENV_LOADED = True
+            break
+
+# 从配置读取 provider 和模型
+PROVIDER = CONFIG.get("provider", "deepseek")
+PROVIDERS = CONFIG.get("available_providers", {})
+provider_config = PROVIDERS.get(PROVIDER, {})
+
+BASE_URL = provider_config.get("base_url", "https://api.deepseek.com")
+ENV_KEY_NAME = provider_config.get("env_key", "DEEPSEEK_API_KEY")
+API_KEY = os.environ.get(ENV_KEY_NAME, "")
+
+MODELS = CONFIG.get("models", {})
+MODEL_CHAT = MODELS.get("chat", "deepseek-v4-pro")
+MODEL_SUMMARY = MODELS.get("summary", "deepseek-v4-flash")
+
+# 系统提示词
+SYSTEM_PROMPT = CONFIG.get("system_prompt", "不要使用Markdown格式。")
+
+# 搜索工具配置
+SEARCH_CONFIG = CONFIG.get("search", {})
+SEARCH_PROVIDER = SEARCH_CONFIG.get("provider", "bocha")
+search_provider_config = SEARCH_CONFIG.get(SEARCH_PROVIDER, {})
+BOCHA_BASE_URL = search_provider_config.get("base_url", "https://api.bocha.cn/v1/web-search")
+BOCHA_ENV_KEY = search_provider_config.get("env_key", "BOCHA_API_KEY")
+BOCHA_API_KEY = os.environ.get(BOCHA_ENV_KEY, "")
+
+# 图片窗口配置
+IMAGE_WINDOW_CONFIG = CONFIG.get("image_window", {})
 
 # 文件路径
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SUMMARY_DIR = os.path.join(SCRIPT_DIR, "summaries")
 CHAT_LOG_DIR = os.path.join(SCRIPT_DIR, "chat_logs")
 MEMORY_FILE = os.path.join(SCRIPT_DIR, "memory.md")
@@ -375,14 +422,17 @@ def tool_calculator(expression: str) -> str:
 
 
 def _get_image_window_size() -> tuple:
-    """根据屏幕分辨率计算图片窗口的默认大小（约屏幕55%，居中显示）"""
+    """根据屏幕分辨率和配置计算图片窗口大小，居中显示"""
     try:
         user32 = ctypes.windll.user32
         screen_w = user32.GetSystemMetrics(0)  # SM_CXSCREEN
         screen_h = user32.GetSystemMetrics(1)  # SM_CYSCREEN
-        # 宽度约屏幕55%，高度约屏幕65%，但不超过1100x800
-        width = min(int(screen_w * 0.55), 1100)
-        height = min(int(screen_h * 0.65), 800)
+        width_ratio = IMAGE_WINDOW_CONFIG.get("width_ratio", 0.55)
+        height_ratio = IMAGE_WINDOW_CONFIG.get("height_ratio", 0.65)
+        max_width = IMAGE_WINDOW_CONFIG.get("max_width", 1100)
+        max_height = IMAGE_WINDOW_CONFIG.get("max_height", 800)
+        width = min(int(screen_w * width_ratio), max_width)
+        height = min(int(screen_h * height_ratio), max_height)
         return (width, height)
     except Exception:
         return (900, 700)  # 兜底默认大小
@@ -701,9 +751,14 @@ messages = [{"role": "system", "content": build_system_prompt(memory)}]
 
 def print_header():
     print("=" * 56)
-    print("  DeepSeek 终端聊天室（工具增强版）")
-    print(f"  模型: {MODEL_CHAT}")
-    print(f"  工具: 博查搜索 / 文件读取 / 文件列表 / 计算器")
+    print("  AI 终端聊天室（工具增强版）")
+    print(f"  服务商: {PROVIDER} | 模型: {MODEL_CHAT}")
+    print(f"  总结模型: {MODEL_SUMMARY}")
+    if ENV_LOADED:
+        print(f"  密钥文件: {ENV_PATH}")
+    else:
+        print("  [警告] 未找到 .env 密钥文件，请检查 config.json 中的 env_file_path")
+    print(f"  搜索: {SEARCH_PROVIDER} | 工具: 搜索/文件读取/文件列表/计算器/图片")
     if memory:
         print(f"  长期记忆: 已加载 ({len(memory)} 字符)")
     else:
