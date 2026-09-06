@@ -124,6 +124,170 @@ os.makedirs(WORKSPACE_DIR, exist_ok=True)
 ALLOWED_SUFFIXES = {".txt", ".md", ".log", ".py", ".json", ".csv", ".xml", ".html", ".css", ".js", ".yaml", ".yml", ".ini", ".cfg", ".bat", ".ps1"}
 MAX_FILE_READ_SIZE = 50000  # 字符数
 
+# ================== Provider 适配层 ==================
+# 不同服务商的 API 调用方式有差异，这里统一适配
+
+# OpenAI 兼容格式的服务商（端点、请求体、响应格式都兼容）
+_OPENAI_COMPATIBLE_PROVIDERS = {"deepseek", "openai", "zhipu", "qwen", "moonshot", "minimax"}
+
+# 百度文心 access_token 缓存
+_baidu_access_token = None
+_baidu_token_expire_time = 0
+
+
+def _get_baidu_access_token() -> str:
+    """百度文心需要先用 API Key + Secret Key 换取 access_token"""
+    global _baidu_access_token, _baidu_token_expire_time
+    if _baidu_access_token and time.time() < _baidu_token_expire_time:
+        return _baidu_access_token
+
+    api_key = os.environ.get("BAIDU_API_KEY", "")
+    secret_key = os.environ.get("BAIDU_SECRET_KEY", "")
+    if not api_key or not secret_key:
+        raise Exception("百度文心需要 BAIDU_API_KEY 和 BAIDU_SECRET_KEY")
+
+    token_url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={api_key}&client_secret={secret_key}"
+    resp = requests.post(token_url, timeout=30)
+    data = resp.json()
+    _baidu_access_token = data.get("access_token", "")
+    _baidu_token_expire_time = time.time() + data.get("expires_in", 2592000) - 300
+    return _baidu_access_token
+
+
+def _get_provider_headers() -> dict:
+    """根据 provider 返回请求头"""
+    if PROVIDER == "anthropic":
+        return {
+            "x-api-key": API_KEY,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        }
+    elif PROVIDER == "baidu":
+        return {"Content-Type": "application/json"}
+    else:
+        return {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+
+def _get_provider_endpoint() -> str:
+    """根据 provider 返回 API 端点"""
+    if PROVIDER == "anthropic":
+        return f"{BASE_URL}/v1/messages"
+    elif PROVIDER == "baidu":
+        token = _get_baidu_access_token()
+        return f"{BASE_URL}/chat/completions?access_token={token}"
+    else:
+        return f"{BASE_URL}/chat/completions"
+
+
+def _build_chat_request(model: str, messages: list, stream: bool = False,
+                         tools: list = None, tool_choice: str = None,
+                         temperature: float = 0.7, max_tokens: int = 4096,
+                         thinking_disabled: bool = False) -> dict:
+    """根据 provider 构建请求体"""
+    if PROVIDER == "anthropic":
+        # Anthropic 格式：system 独立参数，max_tokens 必填
+        system_content = ""
+        chat_messages = []
+        for m in messages:
+            if m.get("role") == "system":
+                system_content = m.get("content", "")
+            elif m.get("role") in ("user", "assistant"):
+                # Anthropic 不支持 tool_calls 字段的 OpenAI 格式，简化处理
+                msg = {"role": m["role"], "content": m.get("content", "")}
+                chat_messages.append(msg)
+        body = {
+            "model": model,
+            "messages": chat_messages,
+            "max_tokens": max_tokens,
+            "stream": stream,
+            "temperature": temperature,
+        }
+        if system_content:
+            body["system"] = system_content
+        # Anthropic 工具调用格式不同，暂不发送 tools（主对话时会提示）
+        return body
+    else:
+        # OpenAI 兼容格式
+        body = {
+            "model": model,
+            "messages": messages,
+            "stream": stream,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if tools:
+            body["tools"] = tools
+            body["tool_choice"] = tool_choice or "auto"
+        if thinking_disabled:
+            body["thinking"] = {"type": "disabled"}
+        return body
+
+
+def _parse_stream_line(line: str):
+    """
+    根据 provider 解析流式响应的一行。
+    返回 (content_chunk, tool_calls_delta) 或 None（表示跳过）。
+    content_chunk 为 "__done__" 时表示流结束。
+    """
+    if not line:
+        return None
+
+    if PROVIDER == "anthropic":
+        # Anthropic SSE 格式：event: xxx / data: {...}
+        if line.startswith("event: "):
+            return ("", None)  # 事件类型行，跳过
+        if line.startswith("data: "):
+            data = line[6:]
+            try:
+                obj = json.loads(data)
+                obj_type = obj.get("type", "")
+                if obj_type == "content_block_delta":
+                    delta = obj.get("delta", {})
+                    text = delta.get("text", "")
+                    return (text, None)
+                elif obj_type == "message_delta":
+                    return ("", None)
+            except json.JSONDecodeError:
+                pass
+        return None
+    else:
+        # OpenAI 兼容格式
+        if not line.startswith("data: "):
+            return None
+        chunk = line[6:]
+        if chunk == "[DONE]":
+            return ("__done__", None)
+        try:
+            obj = json.loads(chunk)
+            delta = obj.get("choices", [{}])[0].get("delta", {})
+            content = delta.get("content", "")
+            tool_calls_delta = delta.get("tool_calls", [])
+            return (content, tool_calls_delta)
+        except json.JSONDecodeError:
+            return None
+
+
+def _parse_non_stream_response(resp) -> str:
+    """根据 provider 解析非流式响应，返回文本内容"""
+    data = resp.json()
+    if PROVIDER == "anthropic":
+        # Anthropic 格式：content 是数组，取第一个 text 块
+        content_blocks = data.get("content", [])
+        text_parts = [b.get("text", "") for b in content_blocks if b.get("type") == "text"]
+        return "".join(text_parts)
+    else:
+        # OpenAI 兼容格式
+        return data["choices"][0]["message"]["content"]
+
+
+def provider_supports_tools() -> bool:
+    """当前 provider 是否支持工具调用"""
+    return PROVIDER in _OPENAI_COMPATIBLE_PROVIDERS or PROVIDER == "baidu"
+
+
 # ================== 工具定义 ==================
 TOOLS = [
     {
@@ -707,23 +871,23 @@ def update_memory(conversation_text: str):
 
     try:
         resp = requests.post(
-            f"{BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": MODEL_SUMMARY,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-                "temperature": 0.3,
-                "max_tokens": 4096,
-                "thinking": {"type": "disabled"},
-            },
+            _get_provider_endpoint(),
+            headers=_get_provider_headers(),
+            json=_build_chat_request(
+                model=MODEL_SUMMARY,
+                messages=[{"role": "user", "content": prompt}],
+                stream=False,
+                temperature=0.3,
+                max_tokens=4096,
+                thinking_disabled=True,
+            ),
             timeout=60,
         )
         if resp.status_code != 200:
             print(f"[记忆更新失败] API 返回 {resp.status_code}，已有记忆保持不变")
             return
 
-        new_memory = resp.json()["choices"][0]["message"]["content"].strip()
+        new_memory = _parse_non_stream_response(resp).strip()
 
         # 安全校验：如果已有记忆且新记忆明显变短，警告可能丢失并追加
         if existing_memory and len(new_memory) < len(existing_memory) * 0.5:
@@ -765,6 +929,8 @@ def print_header():
         print("  [警告] 未找到 .env 密钥文件，请检查 config.json 中的 env_file_path")
     print(f"  搜索: {SEARCH_PROVIDER} | 工具: 搜索/文件读取/文件列表/计算器/图片")
     print(f"  对话前缀: 用户=\"{USER_PREFIX}\" AI=\"{AI_PREFIX}\"")
+    if not provider_supports_tools():
+        print(f"  [提示] 当前服务商 {PROVIDER} 暂不支持工具调用")
     if memory:
         print(f"  长期记忆: 已加载 ({len(memory)} 字符)")
     else:
@@ -788,21 +954,20 @@ def chat_stream(user_input: str) -> str:
         print(AI_PREFIX, end="", flush=True)
 
         try:
+            # 根据 provider 决定是否发送工具（Anthropic 暂不支持工具调用）
+            use_tools = TOOLS if provider_supports_tools() else None
             resp = requests.post(
-                f"{BASE_URL}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": MODEL_CHAT,
-                    "messages": messages,
-                    "tools": TOOLS,
-                    "tool_choice": "auto",
-                    "stream": True,
-                    "temperature": 0.7,
-                    "max_tokens": 4096,
-                },
+                _get_provider_endpoint(),
+                headers=_get_provider_headers(),
+                json=_build_chat_request(
+                    model=MODEL_CHAT,
+                    messages=messages,
+                    stream=True,
+                    tools=use_tools,
+                    tool_choice="auto",
+                    temperature=0.7,
+                    max_tokens=4096,
+                ),
                 stream=True,
                 timeout=120,
             )
@@ -818,23 +983,20 @@ def chat_stream(user_input: str) -> str:
             current_tool_call = None
 
             for line in resp.iter_lines(decode_unicode=True):
-                if not line or not line.startswith("data: "):
+                parsed = _parse_stream_line(line)
+                if parsed is None:
                     continue
-                chunk = line[6:]
-                if chunk == "[DONE]":
+                content, delta_tool_calls = parsed
+                if content == "__done__":
                     break
-                try:
-                    obj = json.loads(chunk)
-                    delta = obj.get("choices", [{}])[0].get("delta", {})
 
-                    # 文本内容
-                    content = delta.get("content", "")
-                    if content:
-                        assistant_content += content
-                        print(content, end="", flush=True)
+                # 文本内容
+                if content:
+                    assistant_content += content
+                    print(content, end="", flush=True)
 
-                    # 工具调用
-                    delta_tool_calls = delta.get("tool_calls", [])
+                # 工具调用（仅 OpenAI 兼容格式）
+                if delta_tool_calls:
                     for tc in delta_tool_calls:
                         idx = tc.get("index", 0)
                         while len(tool_calls) <= idx:
@@ -849,9 +1011,6 @@ def chat_stream(user_input: str) -> str:
                             tool_calls[idx]["function"]["name"] = fn["name"]
                         if "arguments" in fn:
                             tool_calls[idx]["function"]["arguments"] += fn["arguments"]
-
-                except json.JSONDecodeError:
-                    continue
 
             print()  # 换行
 
@@ -967,21 +1126,21 @@ def summarize_conversation() -> str:
 
     try:
         resp = requests.post(
-            f"{BASE_URL}/chat/completions",
-            headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-            json={
-                "model": MODEL_SUMMARY,
-                "messages": [{"role": "user", "content": summary_prompt}],
-                "stream": False,
-                "temperature": 0.3,
-                "max_tokens": 2048,
-                "thinking": {"type": "disabled"},
-            },
+            _get_provider_endpoint(),
+            headers=_get_provider_headers(),
+            json=_build_chat_request(
+                model=MODEL_SUMMARY,
+                messages=[{"role": "user", "content": summary_prompt}],
+                stream=False,
+                temperature=0.3,
+                max_tokens=2048,
+                thinking_disabled=True,
+            ),
             timeout=60,
         )
         if resp.status_code != 200:
             return f"总结失败: API 返回 {resp.status_code}"
-        return resp.json()["choices"][0]["message"]["content"]
+        return _parse_non_stream_response(resp)
     except Exception as e:
         return f"总结失败: {e}"
 
