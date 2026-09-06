@@ -1,162 +1,223 @@
-# DeepSeek 终端聊天室 AI Agent
+*寂寞谁不会有，烦恼谁不会有*
 
-基于 DeepSeek V4 Pro 模型的纯终端 AI 对话助手，支持工具调用（博查搜索、本地文件读取、计算器、图片展示）、长期记忆和多轮对话。
+——陈绮贞《慢歌3》
 
-## 功能特性
 
-- **纯终端交互**：Windows 终端中直接对话，"我："/"AI："前缀，无需 Web 界面
-- **DeepSeek V4 Pro**：对话使用 deepseek-v4-pro，总结/记忆使用 deepseek-v4-flash
-- **工具调用**：
-  - `web_search` — 博查搜索（Bocha），联网检索
-  - `read_file` — 读取本地文本文件
-  - `list_files` — 列出目录文件，按类型分组（图片/文档/视频/音频/代码）
-  - `calculator` — 安全数学计算器
-  - `show_image` — 在新窗口展示本地/网络图片（旧版 Windows 照片查看器，自动调整窗口大小居中）
-- **长期记忆**：启动时加载 `memory.md` 注入系统提示，对话结束后用 flash 模型更新记忆
-- **对话总结**：退出时自动生成对话总结，保存到 `summaries/` 目录
-- **完整记录**：所有对话保存到 `chat_logs/` 目录
-- **在线状态**：启动时检测 API 连通性，显示在线/离线状态
-- **极简系统提示**：仅要求模型不使用 Markdown 格式
+
+# Silver Telegram
+
+
+
+> 一个轻量化的终端 LLM 聊天窗口。漆黑的，安静的，只属于你的。
+
+
+
+## 序
+
+
+
+每一个人都会有孤独的时刻，也许你会有一些话不想对任何人说。不是因为没有值得信任的人，而是因为有些话在说出口之前，连自己都还没想清楚。它需要先落在一个地方——不用是对的，不用是完整的，甚至不用被记住。
+
+
+
+现在，你可以在这个漆黑的窗口里，把话说给一个 LLM。它不是一个朋友，不会用"我懂你"来打断你；它也不是一面镜子，不会把你的话原样照回来。它更像一堵会回应的墙：你丢进去什么，它就轻轻响一下。
+
+
+
+随心所欲，不用承担任何责任。这里没有听众，所以也就没有表演。你可以是最无聊的人，也可以是最锋利的人；可以打一半就删掉，也可以发出去之后才发现那其实不是你想说的。都没有关系。漆黑窗口的好处在于，它从不替你记住，所以你说的每一句，都只属于说出口的那一秒。
+
+
+
+## 这是什么
+
+
+
+基于 DeepSeek V4 Pro 的纯终端 AI 对话助手。没有 Web 界面，没有花哨的 UI，只有一个黑色的命令行窗口和闪烁的光标。支持工具调用（联网搜索、本地文件读取、计算器、图片展示）、长期记忆、对话总结，以及 8 家主流模型服务商的自由切换。
+
+
+
+**核心特性：**
+
+- **纯终端交互** — Windows 终端直接对话，`我：` / `AI：` 前缀，前缀可自定义
+- **工具调用** — 博查联网搜索、本地文件读取/列表、安全计算器、新窗口展示图片
+- **长期记忆** — 启动时加载记忆，对话结束后自动更新，它会"记得"你说过的话
+- **对话总结** — 退出时自动生成本次对话总结，保存到本地
+- **多服务商支持** — DeepSeek / OpenAI / Anthropic / 智谱 / 通义千问 / Moonshot / MiniMax / 百度文心，改一行配置即可切换
+- **轻量图片查看器** — 调用旧版 Windows 照片查看器，窗口自动调整大小居中，不抢焦点
+- **极简系统提示** — 只要求模型不使用 Markdown，不说教，不表演
+
+
 
 ## 安装
 
-### 环境要求
 
-- Windows 10/11
-- Python 3.10+
 
-### 步骤（推荐：使用配置向导）
+### 快速开始（推荐）
 
-1. 克隆仓库：
 ```bash
-git clone <your-repo-url>
-cd My_Agent
+git clone https://github.com/Walmartbag2010/silver-telegram.git
+cd silver-telegram
 ```
 
-2. 双击运行 `首次配置.bat`，配置向导会自动：
-   - 获取当前工作目录
-   - 创建 Python 虚拟环境并安装依赖
-   - 从模板创建 `config.json`
-   - 用记事本打开 `config.json` 引导你填写配置
+然后双击 `首次配置.bat`，配置向导会自动：
+- 创建 Python 虚拟环境并安装依赖
+- 从模板生成配置文件
+- 用记事本打开配置引导你填写
 
-3. 在记事本中填写：
-   - `env_file_path`：你的 `.env` 密钥文件完整路径
-   - `provider`：AI 服务商（deepseek / openai / anthropic 等）
-   - `models.chat` / `models.summary`：对话和总结模型
 
-4. 创建 `.env` 密钥文件：
-   复制 `.env.example` 为 `.env`，放到 `env_file_path` 指定的位置，填入密钥：
-```env
-# DeepSeek
-DEEPSEEK_API_KEY=sk-你的deepseek密钥
-DEEPSEEK_BASE_URL=https://api.deepseek.com
 
-# 博查搜索
-BOCHA_API_KEY=sk-你的博查密钥
+### 手动安装
+
+```bash
+python -m venv agent_env
+agent_env\Scripts\activate
+pip install -r requirements.txt
 ```
 
-> `.env.example` 已预格式化 8 家主流模型服务商（DeepSeek / OpenAI / Anthropic / 智谱 / 通义千问 / Moonshot / MiniMax / 百度文心）和 2 家搜索服务商（博查 / Tavily）的密钥位置，按需填写即可。
 
-5. 双击 `启动终端聊天.bat` 开始使用
 
-4. 配置模型与路径：
+## 配置
 
-首次运行会自动从 `config.example.json` 创建 `config.json`，可编辑以下配置：
+
+
+### 1. 配置文件
+
+首次运行会自动从 `config.example.json` 创建 `config.json`，可编辑以下内容：
+
 ```json
 {
-  "env_file_path": "D:\\路径\\到\\.env",
+  "env_file_path": "C:\\Users\\你的用户名\\Desktop\\.env",
   "provider": "deepseek",
   "models": {
     "chat": "deepseek-v4-pro",
     "summary": "deepseek-v4-flash"
   },
+  "chat_prefix": {
+    "user": "我：",
+    "assistant": "AI："
+  },
   "system_prompt": "不要使用Markdown格式。",
   "image_window": {
     "width_ratio": 0.55,
-    "height_ratio": 0.65,
-    "max_width": 1100,
-    "max_height": 800
+    "height_ratio": 0.65
   }
 }
 ```
 
-**支持的服务商**：`deepseek` / `openai` / `anthropic` / `zhipu` / `qwen` / `moonshot` / `minimax` / `baidu`，切换 `provider` 字段即可，程序会自动读取对应的 `base_url` 和密钥。
 
-> `config.json` 已加入 `.gitignore`，不会上传到 GitHub。
 
-## 使用方法
+### 2. 密钥文件
+
+复制 `.env.example` 为 `.env`，放到 `env_file_path` 指定的位置，填入密钥：
+
+```env
+# DeepSeek
+DEEPSEEK_API_KEY=sk-你的密钥
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+
+# 博查搜索
+BOCHA_API_KEY=sk-你的密钥
+```
+
+> `.env.example` 已预格式化 8 家模型服务商和 2 家搜索服务商的密钥位置，按需填写即可。
+
+
+
+## 使用
+
+
 
 ### 启动
 
-双击 `启动终端聊天.bat`，或在命令行中：
+双击 `启动终端聊天.bat`，或：
+
 ```bash
 agent_env\Scripts\python.exe terminal_chat.py
 ```
 
+
+
 ### 交互
 
-- 启动后显示在线状态和长期记忆加载情况
+启动后会显示当前配置：
+
+```
+========================================================
+  AI 终端聊天室（工具增强版）
+  服务商: deepseek | 模型: deepseek-v4-pro
+  总结模型: deepseek-v4-flash
+  密钥文件: C:\Users\...\Desktop\.env
+  搜索: bocha | 工具: 搜索/文件读取/文件列表/计算器/图片
+  对话前缀: 用户="我：" AI="AI："
+  长期记忆: 已加载 (2414 字符)
+========================================================
+
+我：
+```
+
 - 输入消息后按回车发送
-- AI 回复以 `AI：` 前缀显示，流式输出
+- AI 回复流式输出
 - 输入 `exit`、`quit` 或按 `Ctrl+C` 退出
 - 退出时自动生成对话总结并更新长期记忆
 
-### 示例对话
 
-```
-我：帮我搜索一下今天的天气
-AI：[调用 web_search 工具] 已为你搜索...
-我：打开桌面上的风景照片
-AI：[调用 show_image 工具] 已在新窗口中展示图片（窗口 844×624，居中）
-我：计算一下 128 的平方根
-AI：[调用 calculator 工具] 128 的平方根约为 11.31
-```
 
-## 工具说明
+### 工具调用
 
-### show_image 图片展示
+AI 会根据对话内容自动调用工具，无需手动输入命令：
 
-- 支持本地路径和网络 URL
-- 优先使用旧版 Windows 照片查看器（轻量、纯查看、支持放大缩小）
+| 工具 | 功能 | 示例触发语 |
+|------|------|-----------|
+| `web_search` | 博查联网搜索 | "今天天气怎么样"、"查一下某某新闻" |
+| `read_file` | 读取本地文本文件 | "看看这个文件写了什么" |
+| `list_files` | 列出目录文件 | "桌面上有什么" |
+| `calculator` | 安全数学计算 | "算一下 128 的平方根" |
+| `show_image` | 新窗口展示图片 | "打开那张风景照" |
+
+
+
+### 图片展示
+
+AI 调用 `show_image` 后，会用旧版 Windows 照片查看器在新窗口打开图片：
 - 窗口自动调整为屏幕约 55% 大小，居中显示
-- 网络图片自动下载到 `temp_images/` 临时目录
-- 支持格式：jpg, jpeg, png, gif, bmp, webp, tiff, svg
+- 不抢焦点，不打断终端输入
+- 滚轮放大缩小，方向键切换同目录图片
+- 支持本地路径和网络 URL
 
-### list_files 文件列表
 
-- 按类型分组显示（图片/文档/视频/音频/代码/压缩包/其他）
-- 图片类型完整列出，其他类型超过 10 个提示用 `file_type` 筛选
-- 支持 `file_type` 参数筛选特定类型
 
 ## 项目结构
 
 ```
-My_Agent/
+silver-telegram/
 ├── terminal_chat.py        # 主程序
 ├── 启动终端聊天.bat          # 启动脚本
-├── 首次配置.bat              # 首次配置向导（自动建环境+开配置文件）
-├── config.example.json     # 配置模板（服务商/模型/路径/窗口大小）
+├── 首次配置.bat              # 首次配置向导
+├── config.example.json     # 配置模板
 ├── config.json             # 实际配置（自动创建，不上传）
-├── .env.example            # 密钥模板（8家模型服务商 + 2家搜索服务商）
+├── .env.example            # 密钥模板
 ├── requirements.txt        # Python 依赖
-├── .gitignore             # Git 忽略规则
-├── README.md              # 本文件
+├── README.md              # 你正在读的这个
 ├── memory.md              # 长期记忆（本地，不上传）
 ├── chat_logs/             # 完整对话记录（本地，不上传）
 ├── summaries/             # 对话总结（本地，不上传）
 ├── temp_images/           # 临时图片（本地，不上传）
-├── workspace/             # Agent 工作区（本地，不上传）
 └── agent_env/             # Python 虚拟环境（本地，不上传）
 ```
 
+
+
 ## 注意事项
 
-- **API 密钥安全**：密钥存储在桌面 `.env` 文件，项目目录的 `.gitignore` 已排除所有 `.env` 文件
-- **隐私保护**：对话记录、长期记忆等含个人信息的文件均已加入 `.gitignore`，不会上传到 GitHub
-- **flash 模型配置**：deepseek-v4-flash 必须设置 `"thinking": {"type": "disabled"}`，否则 `content` 字段为空
+- **API 密钥安全**：密钥存储在桌面 `.env` 文件，不硬编码在代码中；`config.json` 和所有隐私文件已加入 `.gitignore`
+- **flash 模型配置**：deepseek-v4-flash 必须设置 `thinking: disabled`，否则返回空内容（代码已自动处理）
 - **图片查看器**：依赖 Windows 旧版照片查看器（`PhotoViewer.dll`），Windows 10/11 自带
-- **博查搜索**：需在 [博查开放平台](https://bocha.cn) 注册获取 API Key
+- **长期记忆**：记忆文件保存在本地，不会上传到任何服务器
 
-## License
 
-MIT
+
+## 声明
+
+
+
+本项目为 AI vibe coding 产物。
